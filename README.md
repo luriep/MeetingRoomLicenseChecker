@@ -6,3 +6,5 @@ But I had a customer ask me, how do I know if I have the right licenses applied 
 
 This powershell script will check Exchange Online for resource accounts that have a meeting room license (or have a E/A/G-type license) and
 report them back as red (wrong license) or green with the proper one. 
+
+Special thanks to Mark Hodge for helping out! 
