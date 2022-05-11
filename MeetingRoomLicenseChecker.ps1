@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 0.04
+.VERSION 0.05
 
 .GUID 
 
@@ -30,6 +30,7 @@ Version 0.01:  Quick and dirty build
 Version 0.02:  Added error checking and status reporting. Changed to use the current version of ExchangeOnlineManagement 
 Version 0.03:  Added support for both Enterprise Premium and Enterprise Pack licenses
 Version 0.04:  Fixed spelling & grammar. 
+Version 0.05:  Reformatted output to break it up by license types
 
 #>
 
@@ -46,6 +47,7 @@ None
 author: Peter Lurie
 created: 2022-05-10
 editied: 2022-05-11
+Note this will not properly pick up MTR-Premium licenses.  To do for future. 
 
 #>
 
@@ -96,29 +98,32 @@ Catch
 
 
 Write-Host "Starting to search for Room Mailbox UPNs and their licenses..." 
-$Room_UPNs = Get-EXOMailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
-Write-Host $Room_UPNs.Length " were found." 
+[System.Collections.ArrayList]$No_License = @()
+[System.Collections.ArrayList]$Non_MeetingRoom_License = @()
+[System.Collections.ArrayList]$MeetingRoom_License = @()
+$Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
 
+Write-Host $Room_UPNs.Length " were found." 
 Write-Host 
 Write-Host 
 Write-Host "Searching for Rooms with licenses..."   #For a list of Product names and service plan identifiers for licensing, see https://docs.microsoft.com/en-us/azure/active-directory/enterprise-users/licensing-service-plan-reference
-Write-Host "Format = DisplayName, UPN, Licenses.  Green = Teams Meeting Room license was found.  Red = E3/E5/G3/G5/A3/A5 license found"
-ForEach ($UPN in $Room_UPNs){
 
+
+ForEach ($UPN in $Room_UPNs){
     $UPN_license =  Get-AzureADUserLicenseDetail -ObjectID $UPN.ExternalDirectoryObjectId | Select-Object -ExpandProperty SkuPartNumber
     
-    if ("MEETING_ROOM" -in $UPN_license) {  #Note with this IF/Else construct, we are intentionally excluding rooms without licenses -- rooms that have neither an E/A/G-type license nor a Meetingroom license. We can expect these to be rooms without MTRs or Hubs in them  
-        write-host $UPN.DisplayName,  $UPN.PrimarySmtpAddress, $UPN_license -ForegroundColor Green   #This means the MeetingRoom license was found in the room
-    }
-    Else {
-       If (("ENTERPRISEPACK" -in $UPN_license) -or  ("ENTERPRISEPREMIUM" -in $UPN_license)) {    
-        write-host $UPN.DisplayName, $UPN.PrimarySmtpAddress, $UPN_license -ForegroundColor Red   #This means that E3/E5/A3/A5/G3/G5 license was found in the room and probably isn't necessary
-       }
-     }
-
-
+    $temp = [pscustomobject]@{'DisplayName'=$UPN.DisplayName;'UPN'=$UPN.PrimarySmtpAddress; 'Licenses'=$UPN_license}
+    if ($null -eq $UPN_license) {$No_License.add($temp) | Out-Null}
+    if ("MEETING_ROOM" -in $UPN_license) {$MeetingRoom_License.add($temp) | Out-Null}
+    if (("MEETING_ROOM" -notin $UPN_license) -and ($null -ne $UPN_license)) {$Non_MeetingRoom_License.add($temp) | Out-Null}
+    $temp = $null
 }
 
-write-host "A grand total of" $Room_UPNs.Length "mailboxes were found, including those with no licenses applied. " 
+Write-Host $Non_MeetingRoom_License.count "Rooms with Non-MTR licenses." -ForegroundColor Cyan
+$Non_MeetingRoom_License | Format-Table
+Write-Host $No_License.count "Rooms without any licenses." -ForegroundColor Cyan
+$No_License | Format-Table
+Write-Host $MeetingRoom_License.count "Rooms with MTR licenses." -ForegroundColor Cyan
+$MeetingRoom_License | Format-Table
 
-Write-Host "Done." 
+Write-Host "Finished." 
