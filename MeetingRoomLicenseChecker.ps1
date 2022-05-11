@@ -1,18 +1,19 @@
 ﻿<#PSScriptInfo
 
-.VERSION 0.02
+.VERSION 0.04
 
 .GUID 
 
-.AUTHOR Peter Lurie
+.AUTHOR Peter Lurie, Mark Hodge
 
 .COMPANYNAME Microsoft
 
-.COPYRIGHT (c) 2022 Peter Lurie
+.COPYRIGHT (c) 2022 Peter Lurie & Mark Hodge
 
 .TAGS Microsoft Teams Room System Surface Hub MEETING_ROOM
 
 .LICENSEURI 
+https://creativecommons.org/licenses/by/4.0/?ref=chooser-v1
 
 .PROJECTURI 
 
@@ -27,6 +28,8 @@
 .RELEASENOTES
 Version 0.01:  Quick and dirty build
 Version 0.02:  Added error checking and status reporting. Changed to use the current version of ExchangeOnlineManagement 
+Version 0.03:  Added support for both Enterprise Premium and Enterprise Pack licenses
+Version 0.04:  Fixed spelling & grammar. 
 
 #>
 
@@ -108,7 +111,7 @@ ForEach ($UPN in $Room_UPNs){
         write-host $UPN.DisplayName,  $UPN.PrimarySmtpAddress, $UPN_license -ForegroundColor Green   #This means the MeetingRoom license was found in the room
     }
     Else {
-       If ("ENTERPRISEPACK" -in $UPN_license) {    
+       If (("ENTERPRISEPACK" -in $UPN_license) -or  ("ENTERPRISEPREMIUM" -in $UPN_license)) {    
         write-host $UPN.DisplayName, $UPN.PrimarySmtpAddress, $UPN_license -ForegroundColor Red   #This means that E3/E5/A3/A5/G3/G5 license was found in the room and probably isn't necessary
        }
      }
