@@ -32,7 +32,7 @@ Version 0.03:  Added support for both Enterprise Premium and Enterprise Pack lic
 Version 0.04:  Fixed spelling & grammar. 
 Version 0.05:  Reformatted output to break it up by license types
 Version 0.06:  Updated to show progress status in checking licenses
-
+Version 0.10:  Updated to support the new for Meeting Room Pro license
 #>
 
 <#
@@ -54,7 +54,8 @@ Note this will not properly pick up MTR-Premium licenses.  To do for future.
 
 Clear-Host
 Write-Host "Welcome to Meeting Room License Checker." 
-Write-Host "This tool will look through your Exchange Online and AAD to find Room Mailbox UPNs. It will then report which rooms have MTR license, which have no license, and which have some other licenses" 
+Write-Host "This tool will look through your Exchange Online and AAD to find Room Mailbox UPNs."
+Write-host "It will then report which rooms have MTR license, which have no license, and which have some other licenses" 
 Write-Host
 
 
@@ -104,11 +105,11 @@ Catch
 		write-host "Unable to connect to your Exchange Online Environmnet"	
 	}
 
-
 Write-Host "Starting to search for Room Mailbox UPNs and their licenses..." 
 [System.Collections.ArrayList]$No_License = @()
 [System.Collections.ArrayList]$Non_MeetingRoom_License = @()
 [System.Collections.ArrayList]$MeetingRoom_License = @()
+[System.Collections.ArrayList]$MeetingRoomPro_License = @()
 $Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
 
 Write-Host $Room_UPNs.Length " were found." 
@@ -125,18 +126,23 @@ ForEach ($UPN in $Room_UPNs){
     
     $temp = [pscustomobject]@{'DisplayName'=$UPN.DisplayName;'UPN'=$UPN.PrimarySmtpAddress; 'Licenses'=$UPN_license}
     if ($null -eq $UPN_license) {$No_License.add($temp) | Out-Null}  #find rooms without licenses
-    if ("MEETING_ROOM" -in $UPN_license) {$MeetingRoom_License.add($temp) | Out-Null}   #find rooms with meeting room standard licenses
-    if (("MEETING_ROOM" -notin $UPN_license) -and ($null -ne $UPN_license)) {$Non_MeetingRoom_License.add($temp) | Out-Null}  #Check to make build other license list
+    if ("MEETING_ROOM" -in $UPN_license) {$MeetingRoom_License.add($temp) | Out-Null}   #find rooms with legacy meeting room standard licenses
+    if ("Microsoft_Teams_Rooms_Pro" -in $UPN_license) {$MeetingRoomPro_License.add($temp) | Out-Null}   #find rooms with meeting room pro licenses
+
+    if (("MEETING_ROOM" -notin $UPN_license) -and ($null -ne $UPN_license) -and ("Microsoft_Teams_Rooms_Pro" -notin $UPN_license)) {$Non_MeetingRoom_License.add($temp) | Out-Null}  #Check to make build other license list
     $temp = $null
      
 
 }
 
-Write-Host $Non_MeetingRoom_License.count "Rooms with Non-MTR licenses." -ForegroundColor Cyan
+Write-Host $Non_MeetingRoom_License.count "Rooms with Non-MTR licenses." -ForegroundColor Red
 $Non_MeetingRoom_License | Format-Table
 Write-Host $No_License.count "Rooms without any licenses." -ForegroundColor Cyan
 $No_License | Format-Table
-Write-Host $MeetingRoom_License.count "Rooms with MTR licenses." -ForegroundColor Cyan
+Write-Host $MeetingRoom_License.count "Rooms with Legacy MTR Standard licenses." -ForegroundColor Yellow
 $MeetingRoom_License | Format-Table
+
+Write-Host $MeetingRoomPro_License.count "Rooms with MTR Pro licenses." -ForegroundColor Green
+$MeetingRoomPro_License | Format-Table
 
 Write-Host "Finished." 
