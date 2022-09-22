@@ -124,25 +124,34 @@ ForEach ($UPN in $Room_UPNs){
     Write-Progress -activity "Searching for Rooms with licenses..." -status "Scanned: $i of $x" -PercentComplete ((($i++)/ $x) * 100)
     $UPN_license =  Get-AzureADUserLicenseDetail -ObjectID $UPN.ExternalDirectoryObjectId | Select-Object -ExpandProperty SkuPartNumber
     
-    $temp = [pscustomobject]@{'DisplayName'=$UPN.DisplayName;'UPN'=$UPN.PrimarySmtpAddress; 'Licenses'=$UPN_license}
-    if ($null -eq $UPN_license) {$No_License.add($temp) | Out-Null}  #find rooms without licenses
-    if ("MEETING_ROOM" -in $UPN_license) {$MeetingRoom_License.add($temp) | Out-Null}   #find rooms with legacy meeting room standard licenses
-    if ("Microsoft_Teams_Rooms_Pro" -in $UPN_license) {$MeetingRoomPro_License.add($temp) | Out-Null}   #find rooms with meeting room pro licenses
+    $temp = [pscustomobject]@{'DisplayName'=$UPN.DisplayName;'UPN'=$UPN.PrimarySmtpAddress; 'Licenses'=$UPN_license} #pulls out the license from a UPN
 
-    if (("MEETING_ROOM" -notin $UPN_license) -and ($null -ne $UPN_license) -and ("Microsoft_Teams_Rooms_Pro" -notin $UPN_license)) {$Non_MeetingRoom_License.add($temp) | Out-Null}  #Check to make build other license list
+    if ($null -eq $UPN_license) {$No_License.add($temp) | Out-Null}  #find rooms without licenses
+
+    
+    if ($UPN_license -like "MEETING_ROOM*") {$MeetingRoom_License.add($temp) | Out-Null}   #find rooms with legacy meeting room licenses
+    if ($UPN_license -like "Microsoft_Teams_Rooms_*") {$MeetingRoomPro_License.add($temp) | Out-Null}   #find rooms with meeting room pro licenses
+
+    #if (("MEETING_ROOM" -notin $UPN_license) -and ($null -ne $UPN_license) -and ("Microsoft_Teams_Rooms_Pro" -notin $UPN_license)) {$Non_MeetingRoom_License.add($temp) | Out-Null}  #Check to make build other license list
+    if (($UPN_license -notlike "MEETING_ROOM*" ) -and ($UPN_license -notlike "Microsoft_Teams_Rooms_*" ) -and ($null -ne $UPN_license) ) {$Non_MeetingRoom_License.add($temp) | Out-Null}  #Check to make build other license list
+
     $temp = $null
      
 
 }
+Write-Host ""
 
-Write-Host $Non_MeetingRoom_License.count "Rooms with Non-MTR licenses." -ForegroundColor Red
-$Non_MeetingRoom_License | Format-Table
-Write-Host $No_License.count "Rooms without any licenses." -ForegroundColor Cyan
+Write-Host $No_License.count "Rooms without any licenses.  (Typically these would be bookable rooms without any Teams Meeting technology.)" -ForegroundColor Cyan
 $No_License | Format-Table
+
 Write-Host $MeetingRoom_License.count "Rooms with Legacy MTR Standard licenses." -ForegroundColor Yellow
 $MeetingRoom_License | Format-Table
 
 Write-Host $MeetingRoomPro_License.count "Rooms with MTR Pro licenses." -ForegroundColor Green
 $MeetingRoomPro_License | Format-Table
 
+Write-Host $Non_MeetingRoom_License.count "Rooms with licenses that do not include Teams Room Pro." -ForegroundColor Red
+$Non_MeetingRoom_License | Format-Table
+
+Write-Host "" 
 Write-Host "Finished." 
