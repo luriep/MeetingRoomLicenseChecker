@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 0.05
+.VERSION 0.10   
 
 .GUID 
 
@@ -32,7 +32,7 @@ Version 0.03:  Added support for both Enterprise Premium and Enterprise Pack lic
 Version 0.04:  Fixed spelling & grammar. 
 Version 0.05:  Reformatted output to break it up by license types
 Version 0.06:  Updated to show progress status in checking licenses
-Version 0.10:  Updated to support the new for Meeting Room Pro license
+Version 0.11:  Updated to support the new SKUs for Meeting Room Pro license  2022-09-22
 #>
 
 <#
@@ -47,8 +47,8 @@ None
 .NOTES
 author: Peter Lurie
 created: 2022-05-10
-editied: 2022-05-20
-Note this will not properly pick up MTR-Premium licenses.  To do for future. 
+editied: 2022-09-22
+
 
 #>
 
@@ -130,9 +130,9 @@ ForEach ($UPN in $Room_UPNs){
 
     
     if ($UPN_license -like "MEETING_ROOM*") {$MeetingRoom_License.add($temp) | Out-Null}   #find rooms with legacy meeting room licenses
+    
     if ($UPN_license -like "Microsoft_Teams_Rooms_*") {$MeetingRoomPro_License.add($temp) | Out-Null}   #find rooms with meeting room pro licenses
-
-    #if (("MEETING_ROOM" -notin $UPN_license) -and ($null -ne $UPN_license) -and ("Microsoft_Teams_Rooms_Pro" -notin $UPN_license)) {$Non_MeetingRoom_License.add($temp) | Out-Null}  #Check to make build other license list
+        
     if (($UPN_license -notlike "MEETING_ROOM*" ) -and ($UPN_license -notlike "Microsoft_Teams_Rooms_*" ) -and ($null -ne $UPN_license) ) {$Non_MeetingRoom_License.add($temp) | Out-Null}  #Check to make build other license list
 
     $temp = $null
