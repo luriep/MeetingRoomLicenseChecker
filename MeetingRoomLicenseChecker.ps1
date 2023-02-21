@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 0.10   
+.VERSION 0.12   
 
 .GUID 
 
@@ -8,7 +8,7 @@
 
 .COMPANYNAME Microsoft
 
-.COPYRIGHT (c) 2022 Peter Lurie & Mark Hodge
+.COPYRIGHT (c) 2022-2023 Peter Lurie & Mark Hodge
 
 .TAGS Microsoft Teams Room System Surface Hub MEETING_ROOM
 
@@ -33,6 +33,7 @@ Version 0.04:  Fixed spelling & grammar.
 Version 0.05:  Reformatted output to break it up by license types
 Version 0.06:  Updated to show progress status in checking licenses
 Version 0.11:  Updated to support the new SKUs for Meeting Room Pro license  2022-09-22
+Version 0.12:  Cleaning up powershell EXO cmds
 #>
 
 <#
@@ -47,22 +48,20 @@ None
 .NOTES
 author: Peter Lurie
 created: 2022-05-10
-editied: 2022-09-22
+editied: 2023-02-21
 
 
 #>
 
 Clear-Host
-Write-Host "Welcome to Meeting Room License Checker." 
+Write-Host "Welcome to Meeting Room License Checker." -ForegroundColor Green
+Write-Host
 Write-Host "This tool will look through your Exchange Online and AAD to find Room Mailbox UPNs."
-Write-host "It will then report which rooms have MTR license, which have no license, and which have some other licenses" 
+Write-host "It will then report which rooms have Teams Room licenses, which have no license, and which have some other licenses" 
 Write-Host
 
 
-
-
-
-#Setup for AAD & ExchangeOnLine V2 EXO V2
+#Setup for AAD & ExchangeOnLine V3 
 Write-Host "Getting ready to connect to AzureAD" 
 If (!(Get-Module -listavailable | where {$_.name -like "*AzureAD*"})) 
 	{ 
@@ -85,19 +84,20 @@ Catch
 
 
 
-Write-Host "Getting ready to connect to Exchange Online" 
+Write-Host "Getting ready to connect to Exchange Online." 
 If (!(Get-Module -listavailable | where {$_.name -like "*ExchangeOnlineManagement*"})) 
 	{ 
-		Install-Module ExchangeOnlineManagement -ErrorAction SilentlyContinue 
+		Install-Module ExchangeOnlineManagement  -ErrorAction SilentlyContinue 
 	} 
 Else 
 	{ 
-		Import-Module ExchangeOnlineManagement -ErrorAction SilentlyContinue 
+		Import-Module ExchangeOnlineManagement  -ErrorAction SilentlyContinue 
 	} 
 	
 Try
 	{
-		$Prompt_EXOCreds = Connect-ExchangeOnline  -ShowBanner:$false
+		write-host "Connecting to your Exchange Online instance"
+        $Prompt_EXOCreds = Connect-ExchangeOnline  -ShowBanner:$false -ExchangeEnvironmentName #Note if using GCC, DOD, or a soverign cloud, see docs for this command for the correct -ExchangeEnvironmentName.  Default is Commerical cloud
 		write-host "Connected successfully to your Exchange Online"
 	}
 Catch
@@ -105,14 +105,15 @@ Catch
 		write-host "Unable to connect to your Exchange Online Environmnet"	
 	}
 
-Write-Host "Starting to search for Room Mailbox UPNs and their licenses..." 
+Write-Host 
+Write-Host "Starting to search for Room Mailbox UPNs and their licenses..." -ForegroundColor Green
 [System.Collections.ArrayList]$No_License = @()
 [System.Collections.ArrayList]$Non_MeetingRoom_License = @()
 [System.Collections.ArrayList]$MeetingRoom_License = @()
 [System.Collections.ArrayList]$MeetingRoomPro_License = @()
 $Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
 
-Write-Host $Room_UPNs.Length " were found." 
+Write-Host $Room_UPNs.Length " were found." -ForegroundColor Green
 Write-Host 
 Write-Host 
 Write-Host "Searching for Rooms with licenses..."   #For a list of Product names and service plan identifiers for licensing, see https://docs.microsoft.com/en-us/azure/active-directory/enterprise-users/licensing-service-plan-reference
@@ -141,7 +142,7 @@ ForEach ($UPN in $Room_UPNs){
 }
 Write-Host ""
 
-Write-Host $No_License.count "Rooms without any licenses.  (Typically these would be bookable rooms without any Teams Meeting technology.)" -ForegroundColor Cyan
+Write-Host $No_License.count "Rooms without any licenses.  (Typically these would be bookable rooms without any Teams Meeting technology or rooms yet to be licensed.)" -ForegroundColor Cyan
 $No_License | Format-Table
 
 Write-Host $MeetingRoom_License.count "Rooms with Legacy MTR Standard licenses." -ForegroundColor Yellow
@@ -154,4 +155,6 @@ Write-Host $Non_MeetingRoom_License.count "Rooms with licenses that do not inclu
 $Non_MeetingRoom_License | Format-Table
 
 Write-Host "" 
+Disconnect-ExchangeOnline -Confirm:$false
+Disconnect-AzureAD -confirm:$False
 Write-Host "Finished." 
