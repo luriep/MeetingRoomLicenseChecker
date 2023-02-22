@@ -11,7 +11,7 @@ Note: The script requires either Exchange Admin or Global Reader rights. (Of cou
 **Now updated to support Teams Room Pro licenses**  
 See https://aka.ms/Sept6blog
 
-
+**Now updated to use Microsoft.Graph.User instead of AzureAD modules**  
 
 Special thanks to Mark Hodge for some of the early examples of this code. 
 
