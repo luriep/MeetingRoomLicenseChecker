@@ -58,7 +58,8 @@ Clear-Host
 Write-Host "Welcome to Meeting Room License Checker." -ForegroundColor Green
 Write-Host
 Write-Host "This tool will look through your Exchange Online and AAD to find Room Mailbox UPNs."
-Write-host "It will then report which rooms have Teams Room licenses, which have no license, and which have some other licenses" 
+Write-host "It will then report which rooms have Teams Room licenses, which have no license, and which have some other licenses"
+Write-host "This is ver 0.20." 
 Write-Host
 
 
@@ -110,6 +111,7 @@ Catch
 
 Write-Host 
 Write-Host "Starting to search for Room Mailbox UPNs and their licenses..." -ForegroundColor Green
+$StartElapsedTime = $(get-date)
 [System.Collections.ArrayList]$No_License = @()
 [System.Collections.ArrayList]$Non_MeetingRoom_License = @()
 [System.Collections.ArrayList]$MeetingRoom_License = @()
@@ -119,7 +121,8 @@ $Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | s
 Write-Host $Room_UPNs.Length " were found." -ForegroundColor Green
 Write-Host 
 Write-Host 
-Write-Host "Searching for Rooms with licenses..."   #For a list of Product names and service plan identifiers for licensing, see https://docs.microsoft.com/en-us/azure/active-directory/enterprise-users/licensing-service-plan-reference
+#Write-Host "Searching for Rooms with licenses..."   
+#For a list of Product names and service plan identifiers for licensing, see https://docs.microsoft.com/en-us/azure/active-directory/enterprise-users/licensing-service-plan-reference
 
 
 $i,$x = 0,$Room_UPNs.count   #Setup for counting devices
@@ -157,10 +160,12 @@ $MeetingRoomPro_License | Format-Table
 Write-Host $Non_MeetingRoom_License.count "Rooms with licenses that do not include Teams Room Pro." -ForegroundColor Red
 $Non_MeetingRoom_License | Format-Table
 
+$elapsedTime = $(get-date) - $StartElapsedTime
+$totalTime = "{0:HH:mm:ss}" -f ([datetime]$elapsedTime.Ticks)
+
 Write-Host "" 
-<# 
-Disconnect-ExchangeOnline -Confirm:$false
-Disconnect-AzureAD -confirm:$False
-Disconnect-Graph -confirm:$False
-#>
-Write-Host "Finished." 
+
+Write-host "Note, Graph and ExchangeOnline connections were not disconnected.  Use Disconnect-ExchangeOnline and Disconnect-MgGraph if needed." 
+Write-Host "" 
+
+Write-Host "Finished.  Processing took $totalTime."  -ForegroundColor Green
