@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 0.12   
+.VERSION 0.20
 
 .GUID 
 
@@ -33,14 +33,15 @@ Version 0.04:  Fixed spelling & grammar.
 Version 0.05:  Reformatted output to break it up by license types
 Version 0.06:  Updated to show progress status in checking licenses
 Version 0.11:  Updated to support the new SKUs for Meeting Room Pro license  2022-09-22
-Version 0.12:  Cleaning up powershell EXO cmds
+Version 0.12:  Cleaning up powershell EXO and AAD modules
+Version 0.20:  Replaced depricated AzureAD modules with Microsoft.Graph.User module
 #>
 
 <#
 .SYNOPSIS
 Reports out the list of resource accounts that have assigned licenses, highlighting the ones with Teams Meeting Room liceses in green
 .DESCRIPTION
-This script uses AAD & EXO to check for resource accounts and their licenses. 
+This script uses Graph Powershell & EXO to check for resource accounts and their licenses. 
 .PARAMETER 
 None
 
@@ -48,7 +49,7 @@ None
 .NOTES
 author: Peter Lurie
 created: 2022-05-10
-editied: 2023-02-21
+editied: 2023-02-22
 
 
 #>
@@ -61,27 +62,27 @@ Write-host "It will then report which rooms have Teams Room licenses, which have
 Write-Host
 
 
-#Setup for AAD & ExchangeOnLine V3 
-Write-Host "Getting ready to connect to AzureAD" 
-If (!(Get-Module -listavailable | where {$_.name -like "*AzureAD*"})) 
+#Setup for Graph
+Write-Host "Loading Microsoft Graph Modules" 
+If (!(Get-Module -listavailable | where {$_.name -like "*Microsoft.Graph.Users*"})) 
 	{ 
-		Install-Module AzureAD -ErrorAction SilentlyContinue 
+		Install-Module Microsoft.Graph.Users  #-ErrorAction SilentlyContinue 
 	} 
 Else 
 	{ 
-		Import-Module AzureAD -ErrorAction SilentlyContinue 
+		Import-Module Microsoft.Graph.Users  #-ErrorAction SilentlyContinue 
 	} 
 
 Try
 	{
-		$Ask_Creds = Connect-AzureAD
-		write-host "Connected successfully to your tenant"
+		write-host "Getting ready to connect to the Microsoft Graph" 
+        Connect-MgGraph -Scopes "User.Read.All"
+		write-host "Connected successfully the Microsoft Graph"
 	}
 Catch
 	{
-		write-host "Unable to connect to yourtenant"	
+		write-host "Unable to connect to your Microsoft Graph Environmnet"	
 	}
-
 
 
 Write-Host "Getting ready to connect to Exchange Online." 
@@ -97,13 +98,15 @@ Else
 Try
 	{
 		write-host "Connecting to your Exchange Online instance"
-        $Prompt_EXOCreds = Connect-ExchangeOnline  -ShowBanner:$false -ExchangeEnvironmentName #Note if using GCC, DOD, or a soverign cloud, see docs for this command for the correct -ExchangeEnvironmentName.  Default is Commerical cloud
+        $Prompt_EXOCreds = Connect-ExchangeOnline  -ShowBanner:$false #Note if using GCC, DOD, or a soverign cloud, see docs for this command for the correct -ExchangeEnvironmentName.  Default is Commerical cloud
 		write-host "Connected successfully to your Exchange Online"
 	}
 Catch
 	{
 		write-host "Unable to connect to your Exchange Online Environmnet"	
 	}
+
+
 
 Write-Host 
 Write-Host "Starting to search for Room Mailbox UPNs and their licenses..." -ForegroundColor Green
@@ -123,7 +126,7 @@ $i,$x = 0,$Room_UPNs.count   #Setup for counting devices
 if ($x -eq $null) {$x = 1}   #run through the loop at least once to print results, otherwise will get a divide/0 error
 ForEach ($UPN in $Room_UPNs){
     Write-Progress -activity "Searching for Rooms with licenses..." -status "Scanned: $i of $x" -PercentComplete ((($i++)/ $x) * 100)
-    $UPN_license =  Get-AzureADUserLicenseDetail -ObjectID $UPN.ExternalDirectoryObjectId | Select-Object -ExpandProperty SkuPartNumber
+    $UPN_license =  Get-MgUserLicenseDetail -UserID $UPN.ExternalDirectoryObjectId | Select-Object -ExpandProperty SkuPartNumber
     
     $temp = [pscustomobject]@{'DisplayName'=$UPN.DisplayName;'UPN'=$UPN.PrimarySmtpAddress; 'Licenses'=$UPN_license} #pulls out the license from a UPN
 
@@ -155,6 +158,9 @@ Write-Host $Non_MeetingRoom_License.count "Rooms with licenses that do not inclu
 $Non_MeetingRoom_License | Format-Table
 
 Write-Host "" 
+<# 
 Disconnect-ExchangeOnline -Confirm:$false
 Disconnect-AzureAD -confirm:$False
+Disconnect-Graph -confirm:$False
+#>
 Write-Host "Finished." 
