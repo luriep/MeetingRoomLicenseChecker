@@ -10,7 +10,7 @@
 
 .COPYRIGHT (c) 2022-2023 Peter Lurie & Mark Hodge
 
-.TAGS Microsoft Teams Room System Surface Hub MEETING_ROOM
+.TAGS Microsoft Teams Room System Surface Hub MEETING_ROOM for Resource Accounts
 
 .LICENSEURI 
 https://creativecommons.org/licenses/by/4.0/?ref=chooser-v1
@@ -35,6 +35,7 @@ Version 0.06:  Updated to show progress status in checking licenses
 Version 0.11:  Updated to support the new SKUs for Meeting Room Pro license  2022-09-22
 Version 0.12:  Cleaning up powershell EXO and AAD modules
 Version 0.20:  Replaced depricated AzureAD modules with Microsoft.Graph.User module
+Version 0.21:  Updated to better track all meeting room licenses
 #>
 
 <#
@@ -57,9 +58,9 @@ editied: 2023-02-22
 Clear-Host
 Write-Host "Welcome to Meeting Room License Checker." -ForegroundColor Green
 Write-Host
-Write-Host "This tool will look through your Exchange Online and AAD to find Room Mailbox UPNs."
-Write-host "It will then report which rooms have Teams Room licenses, which have no license, and which have some other licenses"
-Write-host "This is ver 0.20." 
+Write-Host "This tool will look through your Exchange Online and AAD to find Resource Account Mailbox UPNs."
+Write-host "It will then report which resource accounts have Teams Room licenses, which have no license, and which have some other licenses"
+Write-host "This is ver 0.21." 
 Write-Host
 
 
@@ -70,102 +71,112 @@ If (!(Get-Module -listavailable | where {$_.name -like "*Microsoft.Graph.Users*"
 		Install-Module Microsoft.Graph.Users  #-ErrorAction SilentlyContinue 
 	} 
 Else 
-	{ 
-		Import-Module Microsoft.Graph.Users  #-ErrorAction SilentlyContinue 
+	{	Import-Module Microsoft.Graph.Users  #-ErrorAction SilentlyContinue 
 	} 
-
 Try
-	{
-		write-host "Getting ready to connect to the Microsoft Graph" 
+	{	write-host "Getting ready to connect to the Microsoft Graph" 
         Connect-MgGraph -Scopes "User.Read.All"
 		write-host "Connected successfully the Microsoft Graph"
 	}
 Catch
-	{
-		write-host "Unable to connect to your Microsoft Graph Environmnet"	
+	{	write-host "Unable to connect to your Microsoft Graph Environmnet"	
 	}
 
-
+Write-Host ""
 Write-Host "Getting ready to connect to Exchange Online." 
 If (!(Get-Module -listavailable | where {$_.name -like "*ExchangeOnlineManagement*"})) 
-	{ 
-		Install-Module ExchangeOnlineManagement  -ErrorAction SilentlyContinue 
+	{ 	Install-Module ExchangeOnlineManagement  -ErrorAction SilentlyContinue 
 	} 
 Else 
-	{ 
-		Import-Module ExchangeOnlineManagement  -ErrorAction SilentlyContinue 
+	{ 	Import-Module ExchangeOnlineManagement  -ErrorAction SilentlyContinue 
 	} 
-	
 Try
-	{
-		write-host "Connecting to your Exchange Online instance"
+	{	write-host "Connecting to your Exchange Online instance"
         $Prompt_EXOCreds = Connect-ExchangeOnline  -ShowBanner:$false #Note if using GCC, DOD, or a soverign cloud, see docs for this command for the correct -ExchangeEnvironmentName.  Default is Commerical cloud
 		write-host "Connected successfully to your Exchange Online"
 	}
 Catch
-	{
-		write-host "Unable to connect to your Exchange Online Environmnet"	
+	{	write-host "Unable to connect to your Exchange Online Environmnet"	
 	}
 
 
 
 Write-Host 
-Write-Host "Starting to search for Room Mailbox UPNs and their licenses..." -ForegroundColor Green
+Write-Host "Starting to search for Resource Account Mailbox UPNs and their licenses..." -ForegroundColor Green
 $StartElapsedTime = $(get-date)
 [System.Collections.ArrayList]$No_License = @()
-[System.Collections.ArrayList]$Non_MeetingRoom_License = @()
-[System.Collections.ArrayList]$MeetingRoom_License = @()
-[System.Collections.ArrayList]$MeetingRoomPro_License = @()
-$Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
+[System.Collections.ArrayList]$MTR_Premium_License = @()    # Also includes MMR1 license
+[System.Collections.ArrayList]$MeetingRoom_License = @()   #Teams Meeting Room Standard license
+[System.Collections.ArrayList]$MeetingRoomPro_License = @()  #Optimal license
+[System.Collections.ArrayList]$MeetingRoomBasic_License = @()  #Basic license does max out at 25 licenses/tenant
+[System.Collections.ArrayList]$MeetingRoomOther_License = @()  #Licenses OTHER than what should be applied to a Teams Room Resource Account
 
+
+$Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
 Write-Host $Room_UPNs.Length " were found." -ForegroundColor Green
 Write-Host 
 Write-Host 
-#Write-Host "Searching for Rooms with licenses..."   
+#Write-Host "Searching for resource accounts with licenses..."   
 #For a list of Product names and service plan identifiers for licensing, see https://docs.microsoft.com/en-us/azure/active-directory/enterprise-users/licensing-service-plan-reference
-
 
 $i,$x = 0,$Room_UPNs.count   #Setup for counting devices
 if ($x -eq $null) {$x = 1}   #run through the loop at least once to print results, otherwise will get a divide/0 error
+<# Note that resource accounts can contain multiple licenese.  As such, the sum of all licenses may exceed the number of resource accounts#>
+
 ForEach ($UPN in $Room_UPNs){
-    Write-Progress -activity "Searching for Rooms with licenses..." -status "Scanned: $i of $x" -PercentComplete ((($i++)/ $x) * 100)
+    Write-Progress -activity "Searching for resource accounts with licenses..." -status "Scanned: $i of $x" -PercentComplete ((($i++)/ $x) * 100)
     $UPN_license =  Get-MgUserLicenseDetail -UserID $UPN.ExternalDirectoryObjectId | Select-Object -ExpandProperty SkuPartNumber
-    
     $temp = [pscustomobject]@{'DisplayName'=$UPN.DisplayName;'UPN'=$UPN.PrimarySmtpAddress; 'Licenses'=$UPN_license} #pulls out the license from a UPN
 
-    if ($null -eq $UPN_license) {$No_License.add($temp) | Out-Null}  #find rooms without licenses
+    if ($null -eq $UPN_license) {$No_License.add($temp) | Out-Null}  #find resource accounts without licenses
 
-    
-    if ($UPN_license -like "MEETING_ROOM*") {$MeetingRoom_License.add($temp) | Out-Null}   #find rooms with legacy meeting room licenses
-    
-    if ($UPN_license -like "Microsoft_Teams_Rooms_*") {$MeetingRoomPro_License.add($temp) | Out-Null}   #find rooms with meeting room pro licenses
-        
-    if (($UPN_license -notlike "MEETING_ROOM*" ) -and ($UPN_license -notlike "Microsoft_Teams_Rooms_*" ) -and ($null -ne $UPN_license) ) {$Non_MeetingRoom_License.add($temp) | Out-Null}  #Check to make build other license list
+	if ($UPN_license -like "MTR_PREM*" -or $UPN_license -like "MMR_P*" ) {$MTR_Premium_License.add($temp) | Out-Null}   #find resource accounts with legacy MTR Premium  
+    if ($UPN_license -like "MEETING_ROOM*") {$MeetingRoom_License.add($temp) | Out-Null}   #find resource accounts with legacy Teams Room Standard licenses
+    if ($UPN_license -like "Microsoft_Teams_Rooms_Pro*") {$MeetingRoomPro_License.add($temp) | Out-Null}   #find resource accounts with meeting room pro licenses
+	if ($UPN_license -like "Microsoft_Teams_Rooms_Basic*") {$MeetingRoomBasic_License.add($temp) | Out-Null}   #find resource accounts with meeting room basic licenses
+
+    if (!(($UPN_license -like "MEETING_ROOM*" ) -or ($UPN_license -like "Microsoft_Teams_Rooms_*" ) -or ($UPN_License -like "MTR_PREM") -or ($UPN_License -like "MMR_P1")-or ($null -eq $UPN_license) ))  {$MeetingRoomOther_License.add($temp) | Out-Null}  #If there are resource accounts that have other licenses, add them too.
 
     $temp = $null
-     
+   	}
 
-}
 Write-Host ""
 
-Write-Host $No_License.count "Rooms without any licenses.  (Typically these would be bookable rooms without any Teams Meeting technology or rooms yet to be licensed.)" -ForegroundColor Cyan
-$No_License | Format-Table
+Write-Host $No_License.count "Resource accounts without any licenses.  (Typically these would be bookable rooms without any Teams Meeting technology or resource accounts yet to be licensed.)" -ForegroundColor Cyan
+$No_License | Sort-Object UPN | Format-Table  
+Write-Host "" 
+Write-Host "" 
+Write-Host $MeetingRoom_License.count "resource accounts with Legacy Teams Room Standard licenses. (Typically, these licenses should be upgraded to Teams Room Pro at EA Renewal)." -ForegroundColor Yellow
+$MeetingRoom_License | Sort-Object UPN | Format-Table
+Write-Host "" 
+Write-Host "" 
+Write-Host $MTR_Premium.count "Resource accounts with Teams Room Premium or MMR license. (Typically, these licenses should be migrated to Teams Room Pro at EA Anniversary/Renewal)." -ForegroundColor Red
+$MTR_Premium | Sort-Object UPN | Format-Table
+Write-Host "" 
+Write-Host "" 
+Write-Host $MeetingRoomPro_License.count "Resource accounts with MTR Pro licenses." -ForegroundColor Green
+$MeetingRoomPro_License | Sort-Object UPN | Format-Table
+Write-Host "" 
+Write-Host "" 
+Write-Host $MeetingRoomBasic_License.count "Resource accounts with Teams Room System Basic licenses." -ForegroundColor Green
+$MeetingRoomBasic_License | Sort-Object UPN | Format-Table
+Write-Host "" 
+Write-Host "" 
+Write-Host $MeetingRoomOther_License.count "Resource accounts with licenses other than Teams Room System licenses. (Confirm if these licenses are actually needed)." -ForegroundColor Yellow
+$MeetingRoomOther_License | Sort-Object UPN | Format-Table
 
-Write-Host $MeetingRoom_License.count "Rooms with Legacy MTR Standard licenses." -ForegroundColor Yellow
-$MeetingRoom_License | Format-Table
 
-Write-Host $MeetingRoomPro_License.count "Rooms with MTR Pro licenses." -ForegroundColor Green
-$MeetingRoomPro_License | Format-Table
-
-Write-Host $Non_MeetingRoom_License.count "Rooms with licenses that do not include Teams Room Pro." -ForegroundColor Red
-$Non_MeetingRoom_License | Format-Table
-
-$elapsedTime = $(get-date) - $StartElapsedTime
-$totalTime = "{0:HH:mm:ss}" -f ([datetime]$elapsedTime.Ticks)
 
 Write-Host "" 
-
+Write-Host "" 
 Write-host "Note, Graph and ExchangeOnline connections were not disconnected.  Use Disconnect-ExchangeOnline and Disconnect-MgGraph if needed." 
 Write-Host "" 
 
+$elapsedTime = $(get-date) - $StartElapsedTime
+$totalTime = "{0:HH:mm:ss}" -f ([datetime]$elapsedTime.Ticks)
 Write-Host "Finished.  Processing took $totalTime."  -ForegroundColor Green
+Write-Host "" 
+
+
+
+
