@@ -6,13 +6,9 @@ As Microsoft is continuing to improve capabilities in Microsoft Teams, it is bec
 This powershell script will check Exchange Online for resource accounts that have a meeting room license or a user-type license (E3/E5/A3/A5/G3/G5) and
 print out a table with the details.  It will also identify resource accounts that have no license applied (a room with no technology) as well. 
 
-Note: The script requires either Exchange Admin or Global Reader rights. (Of course, you could use a Global Admin role, but don't do that).
+Note: The script requires  Exchange Admin (recommended) or Global Reader (recommended)  or Global Admin rights. It only reads data, it does not make any changes to the environment.
 
-**Now updated to support Teams Room Pro licenses**  
-See https://aka.ms/Sept6blog
 
-**Now updated to use Microsoft.Graph.User instead of AzureAD modules**  
-
-Special thanks to Mark Hodge for some of the early examples of this code. 
+Note:  This has not been tested in Microsoft 365 GCC, Microsoft 365 GCC High, Microsoft 365 DoD, O365GermanyCloud or Office 365 operated by 21Vianet
 
 Feel free to use & share.
