@@ -66,7 +66,7 @@ Write-Host
 
 #Setup for Graph
 Write-Host "Loading Microsoft Graph Modules" 
-If (!(Get-Module -listavailable | where {$_.name -like "*Microsoft.Graph.Users*"})) 
+If (!(Get-Module -listavailable | Where-Object {$_.name -like "*Microsoft.Graph.Users*"})) 
 	{ 
 		Install-Module Microsoft.Graph.Users  #-ErrorAction SilentlyContinue 
 	} 
@@ -84,7 +84,7 @@ Catch
 
 Write-Host 
 Write-Host "Getting ready to connect to Exchange Online." -ForegroundColor Green
-If (!(Get-Module -listavailable | where {$_.name -like "*ExchangeOnlineManagement*"})) 
+If (!(Get-Module -listavailable | Where-Object {$_.name -like "*ExchangeOnlineManagement*"})) 
 	{ 	Install-Module ExchangeOnlineManagement  -ErrorAction SilentlyContinue 
 	} 
 Else 
@@ -113,13 +113,13 @@ $StartElapsedTime = $(get-date)
 $Report = [System.Collections.Generic.List[Object]]::new()
 
 
-$Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
+$Room_UPNs = get-mailbox | Where-Object {$_.recipientTypeDetails -eq "roomMailbox"} | Select-Object DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
 Write-Host $Room_UPNs.Length " were found." -ForegroundColor Green
 Write-Host "Note that resource accounts can contain 0 or multiple licenses. As such, the total of all licenses discovered may be different than the number of resource accounts" -ForegroundColor Yellow
 Write-Host 
 
 $i,$x = 0,$Room_UPNs.count   #Setup for counting devices
-if ($x -eq $null) {$x = 1}   #run through the loop at least once to print results, otherwise will get a divide/0 error
+if ($null -eq $x) {$x = 1}   #run through the loop at least once to print results, otherwise will get a divide/0 error
 # Note that resource accounts can contain multiple licenese.  As such, the sum of all licenses may exceed the number of resource accounts
 
 ForEach ($UPN in $Room_UPNs){
@@ -172,24 +172,26 @@ Write-Host $MeetingRoomOther_License.count "Resource accounts with licenses othe
 $MeetingRoomOther_License | Sort-Object UPN | Format-Table
 Write-Host 
 Write-Host 
-Write-host "Note, Graph and ExchangeOnline connections were not disconnected.  Use Disconnect-ExchangeOnline and Disconnect-MgGraph if needed."  -ForegroundColor yellow
-Write-Host 
 
 $elapsedTime = $(get-date) - $StartElapsedTime
 $totalTime = "{0:HH:mm:ss}" -f ([datetime]$elapsedTime.Ticks)
 Write-Host "Processing took $totalTime."  -ForegroundColor Green
 Write-Host 
-
+Write-Host
 $answer = read-host -prompt "Do you want to export results to a CSV file?  [y/N]"
 If ($answer.ToLower() -eq 'y' ) 
-{
-	try {
-		$SaveMyFile = Get-SaveFilePath    #Use Get-SaveFilePath function to prompt for filepath information
-		$Report |  sort  UPN  | Export-CSV -Path $SaveMyFile[1] -NoTypeInformation  
-		Write-Host "Results Saved." -ForegroundColor green
-	}
-	catch {
-		Write-Host "Unable to save CSV" -ForegroundColor red
+	{
+		try {
+			$SaveMyFile = Get-SaveFilePath    #Use Get-SaveFilePath function to prompt for filepath information
+			$Report |  Sort-Object  UPN  | Export-CSV -Path $SaveMyFile[1] -NoTypeInformation  
+			Write-Host "Results Saved." -ForegroundColor green
 		}
-}
+		catch {
+			Write-Host "Unable to save CSV" -ForegroundColor red
+			}
+	}
 
+	Write-Host 
+	Write-host "Note: MgGraph and ExchangeOnline connections were not disconnected.  Use Disconnect-ExchangeOnline and Disconnect-MgGraph if needed."  -ForegroundColor yellow
+	Write-Host 
+	Write-Host "Done" -ForegroundColor Green
