@@ -22,7 +22,9 @@ Version 0.11:  Updated to support the new SKUs for Meeting Room Pro license  202
 Version 0.12:  Cleaning up powershell EXO and AAD modules
 Version 0.20:  Replaced depricated AzureAD modules with Microsoft.Graph.User module
 Version 0.21:  Updated to better track all meeting room licenses
+Version 0.22:  invalid
 Version 0.23:  Updated to improve support for CSV output 
+Version 0.24:  updating file/path UI
 #>
 
 <#
@@ -37,19 +39,20 @@ author: Peter Lurie
 created: 2022-05-10
 editied: 2023-03-01
 #>
-Function Get-Save-File-Path ([string]$initialDirectory) {  #prompts for filename and path for exporting to CSV, if needed
+
+Function Get-SaveFilePath ([string]$initialDirectory) {  #prompts for filename and path for exporting to CSV, if needed
+
+	Add-Type -AssemblyName System.Windows.Forms
+	$SaveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
 	$SaveInitialPath = ".\"
 	$SaveFileName = "TeamsMeetingRoomLicenses.csv"
-    [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null  #load up the UI
-    $OpenFileDialog = New-Object System.Windows.Forms.SaveFileDialog   #create the fial dialog object
-    $OpenFileDialog.initialDirectory = $SaveInitialPath
-    $OpenFileDialog.filter = "CSV (*.csv)| *.csv"
-	$OpenFileDialog.FileName = $SaveFileName
-    $OpenFileDialog.ShowDialog() | Out-Null
-
-    return $OpenFileDialog.filename #Returns filepath
+    $SaveFileDialog.initialDirectory = $SaveInitialPath #Sets current starting path
+    $SaveFileDialog.filter = "CSV (*.csv)| *.csv"   	#Restricts to CSV by default
+	$SaveFileDialog.FileName = $SaveFileName   			#Default filename 
+    
+	$SaveFileDialog.ShowDialog()   #actually asks for the filepath
+	return $SaveFileDialog.filename #Returns filepath for writing to CSV
 }
-
 
 Clear-Host
 Write-Host
@@ -57,7 +60,7 @@ Write-Host "Welcome to Meeting Room License Checker." -ForegroundColor Green
 Write-Host
 Write-Host "This tool will look through your Exchange Online and AAD to find Resource Account Mailbox UPNs."
 Write-host "It will then report which resource accounts have Teams Room licenses, which have no license, and which have some other licenses"
-Write-host "This is ver 0.23." 
+Write-host "This is ver 0.24." 
 Write-Host
 
 
@@ -112,7 +115,7 @@ $Report = [System.Collections.Generic.List[Object]]::new()
 
 $Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
 Write-Host $Room_UPNs.Length " were found." -ForegroundColor Green
-Write-Host "Note that resource accounts can contain multiple licenese.  As such, the sum of all licenses may exceed the number of resource accounts" -ForegroundColor Yellow
+Write-Host "Note that resource accounts can contain 0 or multiple licenses. As such, the total of all licenses discovered may be different than the number of resource accounts" -ForegroundColor Yellow
 Write-Host 
 
 $i,$x = 0,$Room_UPNs.count   #Setup for counting devices
@@ -174,16 +177,15 @@ Write-Host
 
 $elapsedTime = $(get-date) - $StartElapsedTime
 $totalTime = "{0:HH:mm:ss}" -f ([datetime]$elapsedTime.Ticks)
-Write-Host "Finished.  Processing took $totalTime."  -ForegroundColor Green
+Write-Host "Processing took $totalTime."  -ForegroundColor Green
 Write-Host 
 
-
-$answer = read-host -prompt "Export results to CSV?  [y/N]"
-If ($answer.ToUpper() -eq 'Y' ) 
+$answer = read-host -prompt "Do you want to export results to a CSV file?  [y/N]"
+If ($answer.ToLower() -eq 'y' ) 
 {
 	try {
-		$SaveMyFile = Get-Save-File-Path    #Use Get-Save-File-Path function to prompt for filepath information
-		$Report |  sort  UPN  | Export-CSV -Path $SaveMyFile -NoTypeInformation  
+		$SaveMyFile = Get-SaveFilePath    #Use Get-SaveFilePath function to prompt for filepath information
+		$Report |  sort  UPN  | Export-CSV -Path $SaveMyFile[1] -NoTypeInformation  
 		Write-Host "Results Saved." -ForegroundColor green
 	}
 	catch {
