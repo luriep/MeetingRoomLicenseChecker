@@ -1,30 +1,16 @@
 ﻿<#PSScriptInfo
-
-.VERSION 0.20
-
+.VERSION 0.23
 .GUID 
-
 .AUTHOR Peter Lurie, Mark Hodge
-
 .COMPANYNAME Microsoft
-
 .COPYRIGHT (c) 2022-2023 Peter Lurie & Mark Hodge
-
 .TAGS Microsoft Teams Room System Surface Hub MEETING_ROOM for Resource Accounts
-
-.LICENSEURI 
-https://creativecommons.org/licenses/by/4.0/?ref=chooser-v1
-
+.LICENSEURI   https://creativecommons.org/licenses/by/4.0/?ref=chooser-v1
 .PROJECTURI 
-
 .ICONURI 
-
 .EXTERNALMODULEDEPENDENCIES 
-
 .REQUIREDSCRIPTS 
-
 .EXTERNALSCRIPTDEPENDENCIES 
-
 .RELEASENOTES
 Version 0.01:  Quick and dirty build
 Version 0.02:  Added error checking and status reporting. Changed to use the current version of ExchangeOnlineManagement 
@@ -36,6 +22,7 @@ Version 0.11:  Updated to support the new SKUs for Meeting Room Pro license  202
 Version 0.12:  Cleaning up powershell EXO and AAD modules
 Version 0.20:  Replaced depricated AzureAD modules with Microsoft.Graph.User module
 Version 0.21:  Updated to better track all meeting room licenses
+Version 0.23:  Updated to improve support for CSV output 
 #>
 
 <#
@@ -45,22 +32,32 @@ Reports out the list of resource accounts that have assigned licenses, highlight
 This script uses Graph Powershell & EXO to check for resource accounts and their licenses. 
 .PARAMETER 
 None
-
-
 .NOTES
 author: Peter Lurie
 created: 2022-05-10
-editied: 2023-02-22
-
-
+editied: 2023-03-01
 #>
+Function Get-Save-File-Path ([string]$initialDirectory) {  #prompts for filename and path for exporting to CSV, if needed
+	$SaveInitialPath = ".\"
+	$SaveFileName = "TeamsMeetingRoomLicenses.csv"
+    [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null  #load up the UI
+    $OpenFileDialog = New-Object System.Windows.Forms.SaveFileDialog   #create the fial dialog object
+    $OpenFileDialog.initialDirectory = $SaveInitialPath
+    $OpenFileDialog.filter = "CSV (*.csv)| *.csv"
+	$OpenFileDialog.FileName = $SaveFileName
+    $OpenFileDialog.ShowDialog() | Out-Null
+
+    return $OpenFileDialog.filename #Returns filepath
+}
+
 
 Clear-Host
+Write-Host
 Write-Host "Welcome to Meeting Room License Checker." -ForegroundColor Green
 Write-Host
 Write-Host "This tool will look through your Exchange Online and AAD to find Resource Account Mailbox UPNs."
 Write-host "It will then report which resource accounts have Teams Room licenses, which have no license, and which have some other licenses"
-Write-host "This is ver 0.21." 
+Write-host "This is ver 0.23." 
 Write-Host
 
 
@@ -76,14 +73,14 @@ Else
 Try
 	{	write-host "Getting ready to connect to the Microsoft Graph" 
         Connect-MgGraph -Scopes "User.Read.All"
-		write-host "Connected successfully the Microsoft Graph"
+		write-host "Connected successfully the Microsoft Graph" -ForegroundColor Green
 	}
 Catch
-	{	write-host "Unable to connect to your Microsoft Graph Environmnet"	
+	{	write-host "Unable to connect to your Microsoft Graph Environment"	-ForegroundColor Red
 	}
 
-Write-Host ""
-Write-Host "Getting ready to connect to Exchange Online." 
+Write-Host 
+Write-Host "Getting ready to connect to Exchange Online." -ForegroundColor Green
 If (!(Get-Module -listavailable | where {$_.name -like "*ExchangeOnlineManagement*"})) 
 	{ 	Install-Module ExchangeOnlineManagement  -ErrorAction SilentlyContinue 
 	} 
@@ -93,10 +90,10 @@ Else
 Try
 	{	write-host "Connecting to your Exchange Online instance"
         $Prompt_EXOCreds = Connect-ExchangeOnline  -ShowBanner:$false #Note if using GCC, DOD, or a soverign cloud, see docs for this command for the correct -ExchangeEnvironmentName.  Default is Commerical cloud
-		write-host "Connected successfully to your Exchange Online"
+		write-host "Connected successfully to your Exchange Online"  -ForegroundColor Green
 	}
 Catch
-	{	write-host "Unable to connect to your Exchange Online Environmnet"	
+	{	write-host "Unable to connect to your Exchange Online Environment"	 -ForegroundColor Red
 	}
 
 
@@ -110,23 +107,23 @@ $StartElapsedTime = $(get-date)
 [System.Collections.ArrayList]$MeetingRoomPro_License = @()  #Optimal license
 [System.Collections.ArrayList]$MeetingRoomBasic_License = @()  #Basic license does max out at 25 licenses/tenant
 [System.Collections.ArrayList]$MeetingRoomOther_License = @()  #Licenses OTHER than what should be applied to a Teams Room Resource Account
+$Report = [System.Collections.Generic.List[Object]]::new()
 
 
 $Room_UPNs = get-mailbox | where {$_.recipientTypeDetails -eq "roomMailbox"} | select DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
 Write-Host $Room_UPNs.Length " were found." -ForegroundColor Green
+Write-Host "Note that resource accounts can contain multiple licenese.  As such, the sum of all licenses may exceed the number of resource accounts" -ForegroundColor Yellow
 Write-Host 
-Write-Host 
-#Write-Host "Searching for resource accounts with licenses..."   
-#For a list of Product names and service plan identifiers for licensing, see https://docs.microsoft.com/en-us/azure/active-directory/enterprise-users/licensing-service-plan-reference
 
 $i,$x = 0,$Room_UPNs.count   #Setup for counting devices
 if ($x -eq $null) {$x = 1}   #run through the loop at least once to print results, otherwise will get a divide/0 error
-<# Note that resource accounts can contain multiple licenese.  As such, the sum of all licenses may exceed the number of resource accounts#>
+# Note that resource accounts can contain multiple licenese.  As such, the sum of all licenses may exceed the number of resource accounts
 
 ForEach ($UPN in $Room_UPNs){
-    Write-Progress -activity "Searching for resource accounts with licenses..." -status "Scanned: $i of $x" -PercentComplete ((($i++)/ $x) * 100)
+    $i++
+	Write-Progress -activity "Searching for resource accounts with licenses..." -status "Scanned: $i of $x" 
     $UPN_license =  Get-MgUserLicenseDetail -UserID $UPN.ExternalDirectoryObjectId | Select-Object -ExpandProperty SkuPartNumber
-    $temp = [pscustomobject]@{'DisplayName'=$UPN.DisplayName;'UPN'=$UPN.PrimarySmtpAddress; 'Licenses'=$UPN_license} #pulls out the license from a UPN
+    $temp = [pscustomobject]@{'DisplayName'=$UPN.DisplayName;'UPN'=$UPN.PrimarySmtpAddress; 'Licenses'=$UPN_license -join ", "} #pulls out the license from a UPN
 
     if ($null -eq $UPN_license) {$No_License.add($temp) | Out-Null}  #find resource accounts without licenses
 
@@ -137,46 +134,60 @@ ForEach ($UPN in $Room_UPNs){
 
     if (!(($UPN_license -like "MEETING_ROOM*" ) -or ($UPN_license -like "Microsoft_Teams_Rooms_*" ) -or ($UPN_License -like "MTR_PREM") -or ($UPN_License -like "MMR_P1")-or ($null -eq $UPN_license) ))  {$MeetingRoomOther_License.add($temp) | Out-Null}  #If there are resource accounts that have other licenses, add them too.
 
+    $Report.Add($temp)   #Creating the file for the CSV, if needed later
+
     $temp = $null
    	}
 
-Write-Host ""
+   
+
+    Write-Progress -Completed -activity "Searching for resource accounts with licenses..."
+
+Write-Host
 
 Write-Host $No_License.count "Resource accounts without any licenses.  (Typically these would be bookable rooms without any Teams Meeting technology or resource accounts yet to be licensed.)" -ForegroundColor Cyan
 $No_License | Sort-Object UPN | Format-Table  
-Write-Host "" 
-Write-Host "" 
+Write-Host 
+Write-Host 
 Write-Host $MeetingRoom_License.count "resource accounts with Legacy Teams Room Standard licenses. (Typically, these licenses should be upgraded to Teams Room Pro at EA Renewal)." -ForegroundColor Yellow
 $MeetingRoom_License | Sort-Object UPN | Format-Table
-Write-Host "" 
-Write-Host "" 
+Write-Host 
+Write-Host 
 Write-Host $MTR_Premium.count "Resource accounts with Teams Room Premium or MMR license. (Typically, these licenses should be migrated to Teams Room Pro at EA Anniversary/Renewal)." -ForegroundColor Red
 $MTR_Premium | Sort-Object UPN | Format-Table
-Write-Host "" 
-Write-Host "" 
+Write-Host 
+Write-Host 
 Write-Host $MeetingRoomPro_License.count "Resource accounts with MTR Pro licenses." -ForegroundColor Green
 $MeetingRoomPro_License | Sort-Object UPN | Format-Table
-Write-Host "" 
-Write-Host "" 
+Write-Host 
+Write-Host 
 Write-Host $MeetingRoomBasic_License.count "Resource accounts with Teams Room System Basic licenses." -ForegroundColor Green
 $MeetingRoomBasic_License | Sort-Object UPN | Format-Table
-Write-Host "" 
-Write-Host "" 
+Write-Host 
+Write-Host 
 Write-Host $MeetingRoomOther_License.count "Resource accounts with licenses other than Teams Room System licenses. (Confirm if these licenses are actually needed)." -ForegroundColor Yellow
 $MeetingRoomOther_License | Sort-Object UPN | Format-Table
-
-
-
-Write-Host "" 
-Write-Host "" 
-Write-host "Note, Graph and ExchangeOnline connections were not disconnected.  Use Disconnect-ExchangeOnline and Disconnect-MgGraph if needed." 
-Write-Host "" 
+Write-Host 
+Write-Host 
+Write-host "Note, Graph and ExchangeOnline connections were not disconnected.  Use Disconnect-ExchangeOnline and Disconnect-MgGraph if needed."  -ForegroundColor yellow
+Write-Host 
 
 $elapsedTime = $(get-date) - $StartElapsedTime
 $totalTime = "{0:HH:mm:ss}" -f ([datetime]$elapsedTime.Ticks)
 Write-Host "Finished.  Processing took $totalTime."  -ForegroundColor Green
-Write-Host "" 
+Write-Host 
 
 
-
+$answer = read-host -prompt "Export results to CSV?  [y/N]"
+If ($answer.ToUpper() -eq 'Y' ) 
+{
+	try {
+		$SaveMyFile = Get-Save-File-Path    #Use Get-Save-File-Path function to prompt for filepath information
+		$Report |  sort  UPN  | Export-CSV -Path $SaveMyFile -NoTypeInformation  
+		Write-Host "Results Saved." -ForegroundColor green
+	}
+	catch {
+		Write-Host "Unable to save CSV" -ForegroundColor red
+		}
+}
 
