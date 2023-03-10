@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 0.23
+.VERSION 0.24
 .GUID 
 .AUTHOR Peter Lurie, Mark Hodge
 .COMPANYNAME Microsoft
@@ -12,26 +12,15 @@
 .REQUIREDSCRIPTS 
 .EXTERNALSCRIPTDEPENDENCIES 
 .RELEASENOTES
-Version 0.01:  Quick and dirty build
-Version 0.02:  Added error checking and status reporting. Changed to use the current version of ExchangeOnlineManagement 
-Version 0.03:  Added support for both Enterprise Premium and Enterprise Pack licenses
-Version 0.04:  Fixed spelling & grammar. 
-Version 0.05:  Reformatted output to break it up by license types
-Version 0.06:  Updated to show progress status in checking licenses
-Version 0.11:  Updated to support the new SKUs for Meeting Room Pro license  2022-09-22
-Version 0.12:  Cleaning up powershell EXO and AAD modules
-Version 0.20:  Replaced depricated AzureAD modules with Microsoft.Graph.User module
-Version 0.21:  Updated to better track all meeting room licenses
-Version 0.22:  invalid
 Version 0.23:  Updated to improve support for CSV output 
 Version 0.24:  updating file/path UI
 #>
 
 <#
 .SYNOPSIS
-Reports out the list of resource accounts that have assigned licenses, highlighting the ones with Teams Meeting Room liceses in green
+Reports out the list of all resource accounts that have assigned licenses, highlighting the ones with Teams Meeting Room Pro liceses in green
 .DESCRIPTION
-This script uses Graph Powershell & EXO to check for resource accounts and their licenses. 
+This script uses MgGraph modules to check for resource accounts and their licenses. 
 .PARAMETER 
 None
 .NOTES
