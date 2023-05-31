@@ -1,5 +1,5 @@
 ﻿<#PSScriptInfo
-.VERSION 0.24
+.VERSION 0.25
 .GUID 
 .AUTHOR Peter Lurie, Mark Hodge
 .COMPANYNAME Microsoft
@@ -14,19 +14,20 @@
 .RELEASENOTES
 Version 0.23:  Updated to improve support for CSV output 
 Version 0.24:  updating file/path UI
+Version 0.25:  to filter on the server vs. local 
 #>
 
 <#
 .SYNOPSIS
-Reports out the list of all resource accounts that have assigned licenses, highlighting the ones with Teams Meeting Room Pro liceses in green
+Reports out the list of resource accounts that have assigned licenses, highlighting the ones with Teams Meeting Room liceses in green
 .DESCRIPTION
-This script uses MgGraph modules to check for resource accounts and their licenses. 
+This script uses Graph Powershell & EXO to check for resource accounts and their licenses. 
 .PARAMETER 
 None
 .NOTES
 author: Peter Lurie
 created: 2022-05-10
-editied: 2023-03-01
+editied: 2023-05-30
 #>
 
 Function Get-SaveFilePath ([string]$initialDirectory) {  #prompts for filename and path for exporting to CSV, if needed
@@ -49,7 +50,7 @@ Write-Host "Welcome to Meeting Room License Checker." -ForegroundColor Green
 Write-Host
 Write-Host "This tool will look through your Exchange Online and AAD to find Resource Account Mailbox UPNs."
 Write-host "It will then report which resource accounts have Teams Room licenses, which have no license, and which have some other licenses"
-Write-host "This is ver 0.24." 
+Write-host "This is ver 0.25." 
 Write-Host
 
 
@@ -81,14 +82,12 @@ Else
 	} 
 Try
 	{	write-host "Connecting to your Exchange Online instance"
-        $Prompt_EXOCreds = Connect-ExchangeOnline  -ShowBanner:$false #Note if using GCC, DOD, or a soverign cloud, see docs for this command for the correct -ExchangeEnvironmentName.  Default is Commerical cloud
+        Connect-ExchangeOnline  -ShowBanner:$false #Note if using GCC, DOD, or a soverign cloud, see docs for this command for the correct -ExchangeEnvironmentName.  Default is Commerical cloud
 		write-host "Connected successfully to your Exchange Online"  -ForegroundColor Green
 	}
 Catch
 	{	write-host "Unable to connect to your Exchange Online Environment"	 -ForegroundColor Red
 	}
-
-
 
 Write-Host 
 Write-Host "Starting to search for Resource Account Mailbox UPNs and their licenses..." -ForegroundColor Green
@@ -101,8 +100,10 @@ $StartElapsedTime = $(get-date)
 [System.Collections.ArrayList]$MeetingRoomOther_License = @()  #Licenses OTHER than what should be applied to a Teams Room Resource Account
 $Report = [System.Collections.Generic.List[Object]]::new()
 
+#Updated to filter server side and not client side.  See next line for new filter. 
+#$Room_UPNs = get-mailbox | Where-Object {$_.recipientTypeDetails -eq "roomMailbox"} | Select-Object DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId  
 
-$Room_UPNs = get-mailbox | Where-Object {$_.recipientTypeDetails -eq "roomMailbox"} | Select-Object DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId
+$Room_UPNs = Get-ExoMailbox -Filter {recipientTypeDetails -eq "RoomMailbox" } | Select-Object DisplayName, PrimarySmtpAddress, ExternalDirectoryObjectId 
 Write-Host $Room_UPNs.Length " were found." -ForegroundColor Green
 Write-Host "Note that resource accounts can contain 0 or multiple licenses. As such, the total of all licenses discovered may be different than the number of resource accounts" -ForegroundColor Yellow
 Write-Host 
