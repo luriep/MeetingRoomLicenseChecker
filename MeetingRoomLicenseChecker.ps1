@@ -14,7 +14,7 @@
 .RELEASENOTES
 Version 0.23:  Updated to improve support for CSV output 
 Version 0.24:  updating file/path UI
-Version 0.25:  to filter on the server vs. local 
+Version 0.25:  udpated to to filter on the server vs. local per feedback  
 #>
 
 <#
